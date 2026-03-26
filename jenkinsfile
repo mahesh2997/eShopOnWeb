@@ -1,45 +1,62 @@
 pipeline {
     agent any
-
+    
     tools {
         // These names must match your 'Global Tool Configuration'
-        dotnetsdk 'dontnet-8' 
+        dotnetsdk 'dontnet-8'
         git 'Git'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                // Pulls the code from the GitHub repo that triggered the job
+                // Pulls the code from the GitHub repo
                 checkout scm
             }
         }
 
         stage('Build & SonarQube Analysis') {
             steps {
-                // 1. Link the Jenkins Credential ID to the variable SONAR_TOKEN
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    
-                    // 2. Inject the SonarQube Server URL and system settings
                     withSonarQubeEnv('sonarQube server') {
                         sh """
-                                # 1. Setup PATH
-                                export PATH="\$PATH:\$HOME/.dotnet/tools"
-                            
-                                # 2. LIMIT MEMORY (The 'Leash' for Java)
-                                export SONAR_SCANNER_OPTS="-Xmx512m -Xms128m"
-                            
-                                # 3. BEGIN SCAN
-                                dotnet sonarscanner begin /k:"eShopOnWeb-Hybrid" /d:sonar.token=\${SONAR_TOKEN}
-                            
-                                # 4. LIMIT CPU (The 'Speed Limit' for .NET)
-                                # -maxcpucount:1 ensures we only use 1 core so the server doesn't freeze
-                                dotnet build eShopOnWeb.sln -maxcpucount:1 /p:NodeReuse=false
-                            
-                                # 5. END SCAN
-                                dotnet sonarscanner end /d:sonar.token=\${SONAR_TOKEN}
-                            """
+                            # 1. Setup PATH for dotnet tools
+                            export PATH="\$PATH:\$HOME/.dotnet/tools"
+
+                            # 2. Limit Java Memory for SonarScanner (Prevents AWS freeze)
+                            export SONAR_SCANNER_OPTS="-Xmx512m -Xms128m"
+
+                            # 3. Begin Sonar Analysis
+                            dotnet sonarscanner begin /k:"eShopOnWeb-Hybrid" /d:sonar.token=\${SONAR_TOKEN}
+
+                            # 4. Build with 1 CPU Core Limit
+                            dotnet build eShopOnWeb.sln -maxcpucount:1 /p:NodeReuse=false
+
+                            # 5. End Sonar Analysis
+                            dotnet sonarscanner end /d:sonar.token=\${SONAR_TOKEN}
+                        """
                     }
+                }
+            }
+        }
+
+        stage('Deploy to Local Windows') {
+            steps {
+                // Uses the 'windows-local-creds' we created in Jenkins
+                withCredentials([usernamePassword(credentialsId: 'windows-local-creds', passwordVariable: 'WIN_PASS', usernameVariable: 'WIN_USER')]) {
+                    sh """
+                        # 1. Dynamically create the Ansible Inventory
+                        # We use port 443 because ngrok provides an HTTPS endpoint
+                        echo "[windows]" > inventory.ini
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user=\${WIN_USER} ansible_password=\${WIN_PASS} ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
+
+                        # 2. Test Connection (Ping)
+                        echo "Testing connection to local machine..."
+                        ansible windows -i inventory.ini -m win_ping
+                        
+                        # 3. Future Deployment commands go here
+                        # ansible-playbook -i inventory.ini deploy-eshop.yml
+                    """
                 }
             }
         }
@@ -47,11 +64,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Build and Analysis completed successfully!"
+            echo "✅ Build, Analysis, and Connection Test successful!"
         }
         failure {
-            echo "❌ Pipeline failed. Check the console output for errors."
+            echo "❌ Pipeline failed. Check the Jenkins console output for errors."
         }
     }
 }
-
