@@ -2,7 +2,6 @@ pipeline {
     agent any
     
     tools {
-        // These names must match your 'Global Tool Configuration'
         dotnetsdk 'dontnet-8'
         git 'Git'
     }
@@ -10,36 +9,37 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Pulls the code from the GitHub repo
                 checkout scm
             }
         }
 
-        stage('Deploy to Local Windows') {
+        stage('Build & SonarQube Analysis') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'windows-local-creds', passwordVariable: 'WIN_PASS', usernameVariable: 'WIN_USER')]) {
-                    sh """
-                        echo "[windows]" > inventory.ini
-                        # Using single quotes (') inside the string to protect the credentials
-                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user='${WIN_USER}' ansible_password='${WIN_PASS}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    withSonarQubeEnv('sonarQube server') {
+                        sh """
+                            export PATH="\$PATH:\$HOME/.dotnet/tools"
+                            export SONAR_SCANNER_OPTS="-Xmx512m -Xms128m"
 
-                        echo "Testing connection to local machine..."
-                        ansible windows -i inventory.ini -m win_ping
-                    """
+                            dotnet sonarscanner begin /k:"eShopOnWeb-Hybrid" /d:sonar.token=\${SONAR_TOKEN}
+                            dotnet build eShopOnWeb.sln -maxcpucount:1 /p:NodeReuse=false
+                            dotnet sonarscanner end /d:sonar.token=\${SONAR_TOKEN}
+                        """
+                    }
                 }
             }
         }
-        }
 
         stage('Deploy to Local Windows') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'windows-local-creds', passwordVariable: 'WIN_PASS', usernameVariable: 'WIN_USER')]) {
                     sh """
+                        # Create Inventory
                         echo "[windows]" > inventory.ini
-                        # Using single quotes (') inside the string to protect the credentials
-                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user='${WIN_USER}' ansible_password='${WIN_PASS}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user='\${WIN_USER}' ansible_password='\${WIN_PASS}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
 
-                        echo "Testing connection to local machine..."
+                        # Test Connection
+                        echo "Testing connection to local machine via ngrok..."
                         ansible windows -i inventory.ini -m win_ping
                     """
                 }
@@ -49,11 +49,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Build, Analysis, and Connection Test successful!"
+            echo "✅ Build, Analysis, and Connection successful!"
         }
         failure {
-            echo "❌ Pipeline failed. Check the Jenkins console output for errors."
+            echo "❌ Pipeline failed. Check the console output."
         }
     }
 }
-
