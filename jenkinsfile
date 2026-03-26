@@ -36,7 +36,7 @@ pipeline {
                     sh """
                         # Create Inventory
                         echo "[windows]" > inventory.ini
-                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user='\${WIN_USER}' ansible_password='\${WIN_PASS}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user=\${WIN_USER} ansible_password=\${WIN_PASS} ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
 
                         # Test Connection
                         echo "Testing connection to local machine via ngrok..."
