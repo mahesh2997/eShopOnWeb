@@ -15,47 +15,32 @@ pipeline {
             }
         }
 
-        stage('Build & SonarQube Analysis') {
+        stage('Deploy to Local Windows') {
             steps {
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    withSonarQubeEnv('sonarQube server') {
-                        sh """
-                            # 1. Setup PATH for dotnet tools
-                            export PATH="\$PATH:\$HOME/.dotnet/tools"
+                withCredentials([usernamePassword(credentialsId: 'windows-local-creds', passwordVariable: 'WIN_PASS', usernameVariable: 'WIN_USER')]) {
+                    sh """
+                        echo "[windows]" > inventory.ini
+                        # Using single quotes (') inside the string to protect the credentials
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user='${WIN_USER}' ansible_password='${WIN_PASS}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
 
-                            # 2. Limit Java Memory for SonarScanner (Prevents AWS freeze)
-                            export SONAR_SCANNER_OPTS="-Xmx512m -Xms128m"
-
-                            # 3. Begin Sonar Analysis
-                            dotnet sonarscanner begin /k:"eShopOnWeb-Hybrid" /d:sonar.token=\${SONAR_TOKEN}
-
-                            # 4. Build with 1 CPU Core Limit
-                            dotnet build eShopOnWeb.sln -maxcpucount:1 /p:NodeReuse=false
-
-                            # 5. End Sonar Analysis
-                            dotnet sonarscanner end /d:sonar.token=\${SONAR_TOKEN}
-                        """
-                    }
+                        echo "Testing connection to local machine..."
+                        ansible windows -i inventory.ini -m win_ping
+                    """
                 }
             }
+        }
         }
 
         stage('Deploy to Local Windows') {
             steps {
-                // Uses the 'windows-local-creds' we created in Jenkins
                 withCredentials([usernamePassword(credentialsId: 'windows-local-creds', passwordVariable: 'WIN_PASS', usernameVariable: 'WIN_USER')]) {
                     sh """
-                        # 1. Dynamically create the Ansible Inventory
-                        # We use port 443 because ngrok provides an HTTPS endpoint
                         echo "[windows]" > inventory.ini
-                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user=\${WIN_USER} ansible_password=\${WIN_PASS} ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
+                        # Using single quotes (') inside the string to protect the credentials
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user='${WIN_USER}' ansible_password='${WIN_PASS}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
 
-                        # 2. Test Connection (Ping)
                         echo "Testing connection to local machine..."
                         ansible windows -i inventory.ini -m win_ping
-                        
-                        # 3. Future Deployment commands go here
-                        # ansible-playbook -i inventory.ini deploy-eshop.yml
                     """
                 }
             }
