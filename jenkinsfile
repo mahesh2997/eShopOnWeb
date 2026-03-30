@@ -43,7 +43,7 @@ pipeline {
 
                         # Run the connection test once
                         echo "Testing connection to local machine via ngrok..."
-                        ansible windows -i inventory.ini -m win_ping -e "ansible_password=${WIN_PASS}"
+                        ansible windows -i inventory.ini -m win_ping -e "ansible_password=\$WIN_PASS"
                     """
                 }
             }
