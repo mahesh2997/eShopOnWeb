@@ -36,10 +36,12 @@ pipeline {
                     sh """
                         # Disable command echoing to protect the password in logs
                         set +x
+                        # Show us exactly what the shell thinks the username is
+                        echo "DEBUG: The username being sent is: ${WIN_USER}"
                         
-                        # Create Inventory
+                        # Create Inventory using single quotes to protect the backslash
                         echo "[windows]" > inventory.ini
-                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user=mahesh ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user='${WIN_USER}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore ansible_winrm_transport=basic" >> inventory.ini
 
                         # Run the connection test once
                         echo "Testing connection to local machine via ngrok..."
