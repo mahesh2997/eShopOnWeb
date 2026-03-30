@@ -34,13 +34,16 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'windows-local-creds', passwordVariable: 'WIN_PASS', usernameVariable: 'WIN_USER')]) {
                     sh """
+                        # Disable command echoing to protect the password in logs
+                        set +x
+                        
                         # Create Inventory
                         echo "[windows]" > inventory.ini
-                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user=\${WIN_USER} ansible_password=\${WIN_PASS} ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user=mahesh ansible_connection=winrm ansible_winrm_server_cert_validation=ignore" >> inventory.ini
 
-                        # Test Connection
+                        # Run the connection test once
                         echo "Testing connection to local machine via ngrok..."
-                        ansible windows -i inventory.ini -m win_ping
+                        ansible windows -i inventory.ini -m win_ping -e "ansible_password=${WIN_PASS}"
                     """
                 }
             }
