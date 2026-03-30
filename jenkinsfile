@@ -39,13 +39,14 @@ pipeline {
                         # Show us exactly what the shell thinks the username is
                         echo "DEBUG: The username being sent is: ${WIN_USER}"
                         
-                        # Create Inventory using single quotes to protect the backslash
+                        set +x
+                        # Create a very simple inventory without the problematic variables
                         echo "[windows]" > inventory.ini
-                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_user= '${WIN_USER}' ansible_connection=winrm ansible_winrm_server_cert_validation=ignore ansible_winrm_transport=basic" >> inventory.ini
-
-                        # Run the connection test once
-                        echo "Testing connection to local machine via ngrok..."
-                        ansible windows -i inventory.ini -m win_ping -e "ansible_password=\$WIN_PASS"
+                        echo "plaided-reliably-twanda.ngrok-free.dev ansible_port=443 ansible_connection=winrm ansible_winrm_server_cert_validation=ignore ansible_winrm_transport=basic" >> inventory.ini
+                    
+                        echo "Testing connection to local machine..."
+                        # Pass BOTH the user and the password as extra vars to avoid INI parsing issues
+                        ansible windows -i inventory.ini -m win_ping -e "ansible_user='${WIN_USER}' ansible_password=\$WIN_PASS"
                     """
                 }
             }
